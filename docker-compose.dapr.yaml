@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  # Dapr sidecar for TodoAccessor
+  todoaccessor-dapr:
+    image: "daprio/daprd:latest"
+    network_mode: "service:todoaccessor"
+    command: [
+      "./daprd",
+      "-app-id", "todoaccessor",
+      "-app-port", "8080",
+      "-log-level", "info"
+    ]
+    depends_on:
+      todoaccessor:
+        condition: service_started
+
+  # Dapr sidecar for TodoManager
+  todomanager-dapr:
+    image: "daprio/daprd:latest"
+    network_mode: "service:todomanager"
+    command: [
+      "./daprd",
+      "-app-id", "todomanager",
+      "-app-port", "8080",
+      "-log-level", "info"
+    ]
+    depends_on:
+      todomanager:
+        condition: service_started

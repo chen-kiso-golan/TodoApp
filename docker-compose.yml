@@ -1,0 +1,90 @@
+services:
+  todoaccessor:
+    image: ${DOCKER_REGISTRY-}todoaccessor
+    build:
+      context: .
+      dockerfile: TodoAccessor/Dockerfile
+    container_name: todo-accessor
+    ports:
+      - "5292:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__TodoDb=Host=postgres;Port=5432;Database=tododb;Username=postgres;Password=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - todoapp-network
+
+  todomanager:
+    image: ${DOCKER_REGISTRY-}todomanager
+    build:
+      context: .
+      dockerfile: TodoManager/Dockerfile
+    container_name: todo-manager
+    ports:
+      - "5271:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - TodoAccessor__BaseUrl=http://todoaccessor:8080
+    depends_on:
+      - todoaccessor
+    networks:
+      - todoapp-network
+
+    # Dapr sidecar for TodoAccessor
+  todoaccessor-dapr:
+    image: "daprio/daprd:latest"
+    network_mode: "service:todoaccessor"
+    command: [
+      "./daprd",
+      "-app-id", "todoaccessor",
+      "-app-port", "8080",
+      "-log-level", "info"
+    ]
+    depends_on:
+      todoaccessor:
+        condition: service_started
+
+  # Dapr sidecar for TodoManager
+  todomanager-dapr:
+    image: "daprio/daprd:latest"
+    network_mode: "service:todomanager"
+    command: [
+      "./daprd",
+      "-app-id", "todomanager",
+      "-app-port", "8080",
+      "-log-level", "info"
+    ]
+    depends_on:
+      todomanager:
+        condition: service_started
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: todo-postgres
+    environment:
+      POSTGRES_DB: tododb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - todoapp-network
+
+volumes:
+  postgres_data:
+
+networks:
+  todoapp-network:
+    driver: bridge
